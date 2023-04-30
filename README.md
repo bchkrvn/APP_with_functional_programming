@@ -23,7 +23,7 @@
 `pip install -r requirements.txt`
 4) Запустить сервер командой:  
 `flask run -p 5000`
-5) Отправить POST-запрос по адресу http://127.0.0.1:5000/perform_query. 
+5) Отправить POST-запрос по адресу http://127.0.0.1:5000/perform_query 
 
 **POST-запрос должен содержать json следующего вида:**
 ```

@@ -12,21 +12,12 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 
 @app.post("/perform_query")
 def perform_query():
-    cmd1 = request.values.get('cmd1')
-    value1 = request.values.get('value1')
-    cmd2 = request.values.get('cmd2')
-    value2 = request.values.get('value2')
-    file_name = request.values.get('file_name')
+    json_request = request.json
+    if not json_request:
+        abort(400)
+    user_request = tools.get_commands(json_request)
 
-    if None in [cmd1, cmd2, value1, value2, file_name]:
-        abort(400, 'Bad keys')
-    if not os.path.isfile(f'./data/{file_name}'):
-        abort(400, 'Bad file_name')
-
-    commands = ((cmd1, value1), (cmd2, value2))
-    result = tools.get_result(commands, file_name)
-
-    return result, 200
+    return tools.get_result(user_request), 200
 
 
 if __name__ == '__main__':

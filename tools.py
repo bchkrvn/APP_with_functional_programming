@@ -1,53 +1,56 @@
+import re
+from typing import List, Dict, Any, Set, Callable
+
 from flask import abort
+from marshmallow import ValidationError
+
+from container import user_request_schema
+from data_classes import UserRequest
 
 
-def get_result(querys: tuple, file_name: str) -> list:
+def get_result(user_request: UserRequest) -> List[str]:
     """
     Получить итоговый результат
-    :param querys: запросы
-    :param file_name: имя файла
+    :param user_request: запрос пользователя
     :return: list
     """
-    strings = _get_string(file_name)
-    query_1 = querys[0]
-    query_2 = querys[1]
-    res = _choose_command(command=query_1[0], value=query_1[1], data=strings)
-    res = _choose_command(command=query_2[0], value=query_2[1], data=res)
-    return list(res)
+    commands: Dict[str, Callable] = {
+        'filter': _filter_data,
+        'map': _map_data,
+        'unique': _unique_data,
+        'sort': _sort_data,
+        'limit': _limit_data,
+        'regex': _regex_data,
+    }
+    data = _get_logs(user_request.filename)
+
+    for command in user_request.commands:
+
+        if command.cmd in commands:
+            data = commands[command.cmd](data=data, value=command.value)
+        else:
+            abort(400, 'Wrong command')
+
+    return list(data)
 
 
-def _choose_command(command: str, value: str, data):
-    """
-    Произвести обработку по названию команды
-    :param command: название команды
-    :param value: значение для команды
-    :param data: данные
-    :return: данные после обработки
-    """
-    if command == 'filter':
-        return _filter_data(value, data)
-    elif command == 'map':
-        return _map_data(value, data)
-    elif command == 'unique':
-        return _unique_data(data)
-    elif command == 'sort':
-        return _sort_data(value, data)
-    elif command == 'limit':
-        return _limit_data(value, data)
-    else:
-        abort(400, 'Bad command')
+def get_commands(json_commands: Dict[str, Any]) -> UserRequest:
+    try:
+        return user_request_schema().load(json_commands)
+    except ValidationError:
+        abort(400, 'wrong data')
 
 
-def _filter_data(value: str, data: iter) -> iter:
+def _filter_data(value: str, data: List[str]) -> List[str]:
     """
     Фильтрация данных
     :param value: значение для фильтрации
     :param data: данные
     """
-    return filter(lambda string: value in string, data)
+    return list(filter(lambda string: value in string, data))
 
 
-def _map_data(value: str, data: iter) -> iter:
+def _map_data(value: str, data: List[str]) -> List[str]:
     """
     Преобразование данных
     :param value: номер колонки
@@ -55,10 +58,10 @@ def _map_data(value: str, data: iter) -> iter:
     """
     if not value.isdigit():
         abort(400, 'Bad value')
-    return map(lambda x: x.split()[int(value)], data)
+    return list(map(lambda x: x.split()[int(value)], data))
 
 
-def _unique_data(data: iter) -> set:
+def _unique_data(data: List, value: None) -> Set[str]:
     """
     Получение уникальных данных
     :param data: данные
@@ -67,23 +70,17 @@ def _unique_data(data: iter) -> set:
     return set(data)
 
 
-def _sort_data(value: str, data: iter):
+def _sort_data(data: List[str], value: str):
     """
     Сортировка данных
     :param value: выбор вида сортировки
     :param data: данные
     """
-    if value == 'asc':
-        choice = False
-    elif value == 'desc':
-        choice = True
-    else:
-        abort(400, 'Bad value')
-
+    choice = value == 'desc'
     return sorted(list(data), key=lambda x: x.split()[3], reverse=choice)
 
 
-def _limit_data(value: str, data: iter) -> list:
+def _limit_data(data: List[str], value: str) -> List[str]:
     """
     Ограничение данных
     :param value: лимит
@@ -95,12 +92,20 @@ def _limit_data(value: str, data: iter) -> list:
     return list(data)[:int(value)]
 
 
-def _get_string(filename: str) -> iter:
+def _regex_data(data: List[str], value: str) -> List[str]:
+    regexp = re.compile(value, re.DOTALL)
+    return [string for string in data if regexp.search(string)]
+
+
+def _get_logs(filename: str) -> List[str]:
     """
     Генератор получения данных из файла
     :param filename: название файла
     :return: iter
     """
-    with open(f'./data/{filename}', 'r', encoding='utf-8') as file:
-        for string in file.readlines():
-            yield string
+    try:
+        with open(f'./data/{filename}', 'r', encoding='utf-8') as file:
+            return list(file.readlines())
+
+    except FileNotFoundError:
+        abort(400, 'Bad filename')
